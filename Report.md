@@ -23,6 +23,45 @@ The trickiest part was handling the two-phase time advancement correctly - every
 
 The implementation is split across several Java files, each handling a specific component:
 
+```
+┌─────────────────────────────────────────────────────────────┐
+│           gatorAirTrafficScheduler.java (Main)              │
+│  • Reads input file (args[0])                               │
+│  • Parses commands                                          │
+│  • Writes to <input>_output_file.txt                        │
+└────────────────────┬────────────────────────────────────────┘
+                     │ calls
+                     ↓
+┌─────────────────────────────────────────────────────────────┐
+│             AirTrafficScheduler.java (Core)                 │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │ Data Structures:                                    │    │
+│  │  • PairingHeap pendingFlights                       │    │
+│  │  • HashMap<Integer, Flight> activeFlights           │    │
+│  │  • HashMap<Integer, ArrayList<Flight>> airlineIndex │    │
+│  │  • CompletionHeap timetable                         │    │
+│  │  • List<Runway> allRunways                          │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                                                              │
+│  Operations: Initialize, SubmitFlight, CancelFlight,        │
+│              Reprioritize, AddRunways, GroundHold,          │
+│              PrintActive, PrintSchedule, Tick, Quit         │
+└──────┬────────────┬───────────────┬─────────────────────────┘
+       │            │               │
+       ↓            ↓               ↓
+┌─────────────┐ ┌──────────┐ ┌────────────────┐
+│ PairingHeap │ │ RunwayHeap│ │ CompletionHeap │
+│   .java     │ │   .java   │ │    .java       │
+│             │ │           │ │                │
+│ Max-Heap by │ │ Min-Heap  │ │ Min-Heap by    │
+│ priority    │ │ by runway │ │ ETA            │
+│             │ │ free time │ │                │
+└─────────────┘ └──────────┘ └────────────────┘
+       ↑            ↑               ↑
+       └────────────┴───────────────┴─── All use Flight.java
+                                          (state tracking + handles)
+```
+
 ### Main Entry Point
 **`gatorAirTrafficScheduler.java`** - Reads the input file, parses commands, and writes output
 
@@ -58,6 +97,22 @@ class PairingNode {
 }
 ```
 
+**Visual Representation:**
+
+```
+Pairing Heap Example (Max-Heap by Priority):
+
+           [Flight 401: priority=8]
+                  |
+                child
+                  |
+        [Flight 402: priority=7] ──sibling──> [Flight 403: priority=6]
+                  |                                    |
+                child                                child
+                  |                                    |
+        [Flight 404: priority=5]              [Flight 405: priority=4]
+```
+
 The heap is ordered by priority (higher first), then by submission time (earlier first), then by flight ID (lower first). Each flight keeps a reference to its node in the heap, which lets us delete or update it in O(log n) time instead of searching through everything.
 
 **Key operations:**
@@ -77,6 +132,23 @@ class Runway {
     int nextFreeTime;
     int heapIndex;    // so we can update it quickly
 }
+```
+
+**Visual Representation (Array-based Binary Min-Heap):**
+
+```
+Index:     [0]  [1]      [2]      [3]      [4]      [5]      [6]
+                 R1      R2       R3       R4       R5       R6
+            (t=0)   (t=3)    (t=5)    (t=8)    (t=10)   (t=12)
+
+Tree View:
+                    [R1: t=0]
+                   /          \
+            [R2: t=3]          [R3: t=5]
+             /      \           /      \
+      [R4: t=8]  [R5: t=10] [R6: t=12]
+
+Parent at i/2, Left child at 2i, Right child at 2i+1
 ```
 
 The heap is ordered by nextFreeTime (earliest first), with runwayID as the tiebreaker. When we schedule a flight, we extract the earliest available runway, assign the flight to it, update the runway's next free time, and put it back in the heap.
@@ -109,15 +181,35 @@ Each flight stores its index in this heap (completionHeapIndex) so we can delete
 Each flight goes through these states:
 
 ```
-PENDING → SCHEDULED → IN_PROGRESS → COMPLETED
+┌──────────┐   scheduleAll()   ┌───────────┐   startTime    ┌──────────────┐
+│ PENDING  │ ───────────────> │ SCHEDULED │ ─────────────> │ IN_PROGRESS  │
+└──────────┘                   └───────────┘   reached      └──────────────┘
+     ↑                              |                              |
+     |                              |                              |
+     └──────────── can cancel ──────┘                              |
+                   can reprioritize                                |
+                                                                   v
+                                                          ┌──────────────┐
+                                                          │  COMPLETED   │
+                                                          │  (removed)   │
+                                                          └──────────────┘
+                                                               ETA reached
 ```
 
-- **PENDING:** Flight submitted but no runway assigned yet
-- **SCHEDULED:** Has a runway and time slot, but hasn't started using it
-- **IN_PROGRESS:** Currently using the runway (can't be canceled or changed)
-- **COMPLETED:** Landed and removed from the system
+**State Descriptions:**
+- **PENDING:** Flight submitted but no runway assigned yet  
+  → Stored in: PairingHeap, ActiveFlights, AirlineIndex
+  
+- **SCHEDULED:** Has a runway and time slot, but hasn't started using it  
+  → Stored in: CompletionHeap, ActiveFlights, AirlineIndex
+  
+- **IN_PROGRESS:** Currently using the runway (can't be canceled or changed)  
+  → Stored in: CompletionHeap, ActiveFlights, AirlineIndex
+  
+- **COMPLETED:** Landed and removed from the system  
+  → Removed from all data structures
 
-The tricky part is that flights can only be canceled or reprioritized if they're PENDING or SCHEDULED but haven't started yet. Once they're IN_PROGRESS, they're committed.
+**Important:** Flights can only be canceled or reprioritized if they're PENDING or SCHEDULED but haven't started yet. Once they're IN_PROGRESS, they're committed (non-preemptive).
 
 ---
 
