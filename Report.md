@@ -60,9 +60,6 @@ class PairingNode {
 
 The heap is ordered by priority (higher first), then by submission time (earlier first), then by flight ID (lower first). It's a multi-way tree where each node has a leftmost child and right sibling pointer. Each flight keeps a reference to its node in the heap, which lets us delete or update it in O(log n) time instead of searching through everything.
 
-![Pairing Heap Structure](https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Pairing_heap.svg/400px-Pairing_heap.svg.png)
-*Figure 1: Pairing Heap structure showing leftmost-child, right-sibling representation (Source: Wikipedia)*
-
 **Key operations:**
 - Insert: O(1) amortized - just meld the new node with the root
 - Extract max: O(log n) amortized - uses a two-pass merge to rebuild the heap
@@ -83,9 +80,6 @@ class Runway {
 ```
 
 The heap is ordered by nextFreeTime (earliest first), with runwayID as the tiebreaker. It's a standard array-based binary heap where parent is at index i/2, left child at 2i, and right child at 2i+1. When we schedule a flight, we extract the earliest available runway, assign the flight to it, update the runway's next free time, and put it back in the heap.
-
-![Binary Min-Heap](https://upload.wikimedia.org/wikipedia/commons/thumb/6/69/Min-heap.png/400px-Min-heap.png)
-*Figure 2: Binary Min-Heap structure with array representation (Source: Wikipedia)*
 
 ### 3. Binary Min-Heap (for Completion/Timetable)
 
@@ -140,9 +134,6 @@ The scheduling algorithm is pretty straightforward:
    - Put the flight in the completion heap
 
 It's greedy because we always pick the highest priority flight and give it the earliest available slot. No look-ahead or optimization.
-
-![Greedy Algorithm](https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Greedy-search-path-example.gif/220px-Greedy-search-path-example.gif)
-*Figure 3: Greedy algorithm approach - making locally optimal choices (Source: Wikipedia)*
 
 **Time complexity:** O(m log n + m log r) where m = number of flights to schedule, n = total flights, r = runways
 
