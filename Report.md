@@ -99,6 +99,14 @@ class PairingNode {
 
 **Visual Representation:**
 
+<!-- OPTIONAL: Add a Pairing Heap diagram image here
+     Search for: "Pairing Heap data structure diagram"
+     Good sources: GeeksforGeeks, Wikipedia, CS course materials
+     Save as: pairing_heap_diagram.png
+     Uncomment below line and add your image:
+     ![Pairing Heap Structure](pairing_heap_diagram.png)
+-->
+
 ```
 Pairing Heap Example (Max-Heap by Priority):
 
@@ -135,6 +143,14 @@ class Runway {
 ```
 
 **Visual Representation (Array-based Binary Min-Heap):**
+
+<!-- OPTIONAL: Add a Binary Min-Heap diagram image here
+     Search for: "Binary Min Heap array representation diagram"
+     Good sources: GeeksforGeeks, Programiz, VisuAlgo
+     Save as: binary_heap_diagram.png
+     Uncomment below line and add your image:
+     ![Binary Min-Heap Structure](binary_heap_diagram.png)
+-->
 
 ```
 Index:     [0]  [1]      [2]      [3]      [4]      [5]      [6]
