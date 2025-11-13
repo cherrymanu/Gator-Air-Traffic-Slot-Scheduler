@@ -21,61 +21,22 @@ The trickiest part was handling the two-phase time advancement correctly - every
 
 ## Program Structure
 
-The implementation is split across several Java files, each handling a specific component:
+The implementation is split across several Java files:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│           gatorAirTrafficScheduler.java (Main)              │
-│  • Reads input file (args[0])                               │
-│  • Parses commands                                          │
-│  • Writes to <input>_output_file.txt                        │
-└────────────────────┬────────────────────────────────────────┘
-                     │ calls
-                     ↓
-┌─────────────────────────────────────────────────────────────┐
-│             AirTrafficScheduler.java (Core)                 │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ Data Structures:                                    │    │
-│  │  • PairingHeap pendingFlights                       │    │
-│  │  • HashMap<Integer, Flight> activeFlights           │    │
-│  │  • HashMap<Integer, ArrayList<Flight>> airlineIndex │    │
-│  │  • CompletionHeap timetable                         │    │
-│  │  • List<Runway> allRunways                          │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                              │
-│  Operations: Initialize, SubmitFlight, CancelFlight,        │
-│              Reprioritize, AddRunways, GroundHold,          │
-│              PrintActive, PrintSchedule, Tick, Quit         │
-└──────┬────────────┬───────────────┬─────────────────────────┘
-       │            │               │
-       ↓            ↓               ↓
-┌─────────────┐ ┌──────────┐ ┌────────────────┐
-│ PairingHeap │ │ RunwayHeap│ │ CompletionHeap │
-│   .java     │ │   .java   │ │    .java       │
-│             │ │           │ │                │
-│ Max-Heap by │ │ Min-Heap  │ │ Min-Heap by    │
-│ priority    │ │ by runway │ │ ETA            │
-│             │ │ free time │ │                │
-└─────────────┘ └──────────┘ └────────────────┘
-       ↑            ↑               ↑
-       └────────────┴───────────────┴─── All use Flight.java
-                                          (state tracking + handles)
-```
+**Main Entry Point:**
+- `gatorAirTrafficScheduler.java` - Reads the input file from command line args, parses commands, and writes output to `<input>_output_file.txt`
 
-### Main Entry Point
-**`gatorAirTrafficScheduler.java`** - Reads the input file, parses commands, and writes output
+**Core Scheduler:**
+- `AirTrafficScheduler.java` - Contains the main scheduling logic and implements all 10 operations. Uses PairingHeap for pending flights, two Binary Min-Heaps for runways and completion tracking, plus HashMaps for fast lookups.
 
-### Core Scheduler
-**`AirTrafficScheduler.java`** - The main scheduling logic, handles all 10 operations
+**Custom Data Structures (all from scratch):**
+- `PairingHeap.java` - Max-heap for pending flights ordered by priority
+- `RunwayHeap.java` - Min-heap for tracking runway availability  
+- `CompletionHeap.java` - Min-heap for the timetable (scheduled flights by ETA)
 
-### Custom Data Structures (all implemented from scratch)
-**`PairingHeap.java`** - Max-heap for pending flights  
-**`RunwayHeap.java`** - Min-heap for runway management  
-**`CompletionHeap.java`** - Min-heap for scheduled flights (timetable)
-
-### Supporting Classes
-**`Flight.java`** - Flight object with state tracking  
-**`Makefile`** - Compiles everything and creates the executable
+**Supporting Classes:**
+- `Flight.java` - Flight object with state tracking and heap handles
+- `Makefile` - Compiles everything
 
 ---
 
@@ -97,31 +58,7 @@ class PairingNode {
 }
 ```
 
-**Visual Representation:**
-
-<!-- OPTIONAL: Add a Pairing Heap diagram image here
-     Search for: "Pairing Heap data structure diagram"
-     Good sources: GeeksforGeeks, Wikipedia, CS course materials
-     Save as: pairing_heap_diagram.png
-     Uncomment below line and add your image:
-     ![Pairing Heap Structure](pairing_heap_diagram.png)
--->
-
-```
-Pairing Heap Example (Max-Heap by Priority):
-
-           [Flight 401: priority=8]
-                  |
-                child
-                  |
-        [Flight 402: priority=7] ──sibling──> [Flight 403: priority=6]
-                  |                                    |
-                child                                child
-                  |                                    |
-        [Flight 404: priority=5]              [Flight 405: priority=4]
-```
-
-The heap is ordered by priority (higher first), then by submission time (earlier first), then by flight ID (lower first). Each flight keeps a reference to its node in the heap, which lets us delete or update it in O(log n) time instead of searching through everything.
+The heap is ordered by priority (higher first), then by submission time (earlier first), then by flight ID (lower first). It's a multi-way tree where each node has a leftmost child and right sibling pointer. Each flight keeps a reference to its node in the heap, which lets us delete or update it in O(log n) time instead of searching through everything.
 
 **Key operations:**
 - Insert: O(1) amortized - just meld the new node with the root
@@ -142,32 +79,7 @@ class Runway {
 }
 ```
 
-**Visual Representation (Array-based Binary Min-Heap):**
-
-<!-- OPTIONAL: Add a Binary Min-Heap diagram image here
-     Search for: "Binary Min Heap array representation diagram"
-     Good sources: GeeksforGeeks, Programiz, VisuAlgo
-     Save as: binary_heap_diagram.png
-     Uncomment below line and add your image:
-     ![Binary Min-Heap Structure](binary_heap_diagram.png)
--->
-
-```
-Index:     [0]  [1]      [2]      [3]      [4]      [5]      [6]
-                 R1      R2       R3       R4       R5       R6
-            (t=0)   (t=3)    (t=5)    (t=8)    (t=10)   (t=12)
-
-Tree View:
-                    [R1: t=0]
-                   /          \
-            [R2: t=3]          [R3: t=5]
-             /      \           /      \
-      [R4: t=8]  [R5: t=10] [R6: t=12]
-
-Parent at i/2, Left child at 2i, Right child at 2i+1
-```
-
-The heap is ordered by nextFreeTime (earliest first), with runwayID as the tiebreaker. When we schedule a flight, we extract the earliest available runway, assign the flight to it, update the runway's next free time, and put it back in the heap.
+The heap is ordered by nextFreeTime (earliest first), with runwayID as the tiebreaker. It's a standard array-based binary heap where parent is at index i/2, left child at 2i, and right child at 2i+1. When we schedule a flight, we extract the earliest available runway, assign the flight to it, update the runway's next free time, and put it back in the heap.
 
 ### 3. Binary Min-Heap (for Completion/Timetable)
 
@@ -194,38 +106,17 @@ Each flight stores its index in this heap (completionHeapIndex) so we can delete
 
 ## Flight Lifecycle
 
-Each flight goes through these states:
+Each flight goes through four states: PENDING → SCHEDULED → IN_PROGRESS → COMPLETED
 
-```
-┌──────────┐   scheduleAll()   ┌───────────┐   startTime    ┌──────────────┐
-│ PENDING  │ ───────────────> │ SCHEDULED │ ─────────────> │ IN_PROGRESS  │
-└──────────┘                   └───────────┘   reached      └──────────────┘
-     ↑                              |                              |
-     |                              |                              |
-     └──────────── can cancel ──────┘                              |
-                   can reprioritize                                |
-                                                                   v
-                                                          ┌──────────────┐
-                                                          │  COMPLETED   │
-                                                          │  (removed)   │
-                                                          └──────────────┘
-                                                               ETA reached
-```
+**PENDING:** Flight submitted but no runway assigned yet. Stored in the PairingHeap waiting to be scheduled.
 
-**State Descriptions:**
-- **PENDING:** Flight submitted but no runway assigned yet  
-  → Stored in: PairingHeap, ActiveFlights, AirlineIndex
-  
-- **SCHEDULED:** Has a runway and time slot, but hasn't started using it  
-  → Stored in: CompletionHeap, ActiveFlights, AirlineIndex
-  
-- **IN_PROGRESS:** Currently using the runway (can't be canceled or changed)  
-  → Stored in: CompletionHeap, ActiveFlights, AirlineIndex
-  
-- **COMPLETED:** Landed and removed from the system  
-  → Removed from all data structures
+**SCHEDULED:** Has a runway and time slot assigned, but hasn't reached its start time yet. Stored in the CompletionHeap (timetable). Can still be canceled or reprioritized at this stage.
 
-**Important:** Flights can only be canceled or reprioritized if they're PENDING or SCHEDULED but haven't started yet. Once they're IN_PROGRESS, they're committed (non-preemptive).
+**IN_PROGRESS:** Currently using the runway (startTime has been reached). Cannot be canceled or reprioritized anymore - the system is non-preemptive, so once a flight starts, it's committed.
+
+**COMPLETED:** Flight has landed (ETA reached) and is removed from all data structures.
+
+The tricky part is that flights can only be canceled or reprioritized if they're PENDING or SCHEDULED but haven't started yet. Once they're IN_PROGRESS, they're locked in.
 
 ---
 
